@@ -176,6 +176,8 @@ class EndToEndFlowTestCase: BaseTestCase {
         Defaults[.statusbarEventTitleLength] = statusbarEventTitleLengthLimits.max
         Defaults[.personalEventsAppereance] = .show_active
         Defaults[.nonAllDayEvents] = .show
+        // These flows assert on event-list rows, including the featured one.
+        Defaults[.hideFeaturedEventInList] = false
     }
 
     fileprivate func makeHarness(
@@ -345,7 +347,11 @@ final class StatusBarEndToEndFlowTests: EndToEndFlowTestCase {
 
         XCTAssertTrue(titles.contains { $0.contains("Event E1") })
         XCTAssertTrue(titles.contains { $0.contains("Event E2") })
-        XCTAssertTrue(titles.contains { $0.hasPrefix("status_bar_section_today".loco()) })
+        XCTAssertTrue(titles.contains {
+            $0.hasPrefix("status_bar_section_today".loco())
+                || $0.contains("status_bar_day_summary_one".loco())
+                || $0.contains("status_bar_day_summary_none".loco())
+        })
 
         let summary = items.first {
             $0.identifier == MenuBuilder.meetingSummaryItemIdentifier

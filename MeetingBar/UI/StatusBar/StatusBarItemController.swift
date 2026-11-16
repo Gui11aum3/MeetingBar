@@ -56,8 +56,26 @@ final class StatusBarItemController {
     /// events without wiring up the full app model chain).
     private var _eventsOverride: [MBEvent]?
     var events: [MBEvent] {
-        get { _eventsOverride ?? dependencies.events() }
+        get { applyingResponseOverrides(to: _eventsOverride ?? dependencies.events()) }
         set { _eventsOverride = newValue }
+    }
+
+    /// Answers sent to Google, shown right away until a refresh returns them.
+    private var responseOverrides: [String: MBEventAttendeeStatus] = [:]
+
+    private func applyingResponseOverrides(to events: [MBEvent]) -> [MBEvent] {
+        guard !responseOverrides.isEmpty else { return events }
+        return events.map { event in
+            guard let status = responseOverrides[event.id] else { return event }
+            if event.participationStatus == status {
+                // The provider caught up; stop overriding.
+                responseOverrides[event.id] = nil
+                return event
+            }
+            var updated = event
+            updated.participationStatus = status
+            return updated
+        }
     }
 
     let installationDate = getInstallationDate()
@@ -109,7 +127,8 @@ final class StatusBarItemController {
             .showEventCalendarColor,
             .timeFormat, .bookmarks,
             .pastEventsAppereance, .declinedEventsAppereance,
-            .showTimelineInMenu, .eventTitleFormat,
+            .showTimelineInMenu, .eventTitleFormat, .hideFeaturedEventInList,
+            .meetingPlaceChipMode, .workingLocationsByDay,
             options: []
         )
         .receive(on: DispatchQueue.main)
@@ -322,8 +341,14 @@ final class StatusBarItemController {
         var appState = dependencies.appState()
         appState.events = events
         let menuState = StatusBarMenuState.make(from: appState)
-        let builder = MenuBuilder(
+        var builder = MenuBuilder(
             target: self, state: menuState, installationDate: installationDate)
+        builder.expandedEventIDs = expandedEventIDs
+        builder.hidesFeaturedEventInList = Defaults[.hideFeaturedEventInList]
+        builder.usesDaySummaryLayout = true
+        builder.placeChipMode = MeetingPlaceChipMode(rawValue: Defaults[.meetingPlaceChipMode]) ?? .officeDays
+        builder.workingLocationsByDay = Defaults[.workingLocationsByDay]
+            .compactMapValues(WorkingLocationKind.init(rawValue:))
 
         statusItemMenu.autoenablesItems = false
         statusItemMenu.removeAllItems()
@@ -347,12 +372,18 @@ final class StatusBarItemController {
                     date: today, title: "status_bar_section_today".loco(),
                     events: menuState.todayEvents)
 
-                statusItemMenu.addItem(NSMenuItem.separator())
+                // Day summary layout runs days together under their labels.
+                if !builder.usesDaySummaryLayout {
+                    statusItemMenu.addItem(NSMenuItem.separator())
+                }
 
                 statusItemMenu.items += builder.buildDateSection(
                     date: tomorrow, title: "status_bar_section_tomorrow".loco(),
                     events: menuState.tomorrowEvents)
             }
+        }
+        if let footer = builder.buildUpdatedFooter() {
+            statusItemMenu.addItem(footer)
         }
         statusItemMenu.addItem(NSMenuItem.separator())
         statusItemMenu.items += builder.buildJoinSection(
@@ -434,10 +465,60 @@ final class StatusBarItemController {
         }
     }
 
+    /// Upcoming rows the user clicked open; they stay open until clicked again.
+    private var expandedEventIDs: Set<String> = []
+
     @objc
     func clickOnEvent(sender: NSMenuItem) {
         if let event: MBEvent = sender.representedObject as? MBEvent {
             dependencies.send(.joinMeeting(eventID: event.id))
+        }
+    }
+
+    /// Remembers rows opened in place so they stay open on the next rebuild.
+    func setEvent(_ eventID: String, expanded: Bool) {
+        if expanded {
+            expandedEventIDs.insert(eventID)
+        } else {
+            expandedEventIDs.remove(eventID)
+        }
+    }
+
+    @objc
+    func respondToEvent(sender: NSMenuItem) {
+        guard let request = sender.representedObject as? EventResponseRequest else { return }
+        respond(to: request, closingMenu: nil)
+    }
+
+    /// Records an answer. `closingMenu` is the open menu when the answer came
+    /// from the action bar; it's closed only when another app has to open.
+    func respond(to request: EventResponseRequest, closingMenu menu: NSMenu?) {
+        MeetingBarLogger.calendar.info("RSVP tapped; provider=\(String(describing: self.stateProvider), privacy: .public)")
+        // EventKit can't change a participant's status: answer in Calendar.
+        guard stateProvider == .googleCalendar else {
+            menu?.cancelTracking()
+            request.fallbackURL?.openInDefaultBrowser()
+            return
+        }
+        // Google: answer in the background, then refresh to show it. If that
+        // fails (e.g. a session granted before the write scope), open the
+        // event in Google Calendar instead.
+        Task { @MainActor in
+            do {
+                try await GCEventStore.shared.respond(to: request)
+                self.responseOverrides[request.eventID] = switch request.response {
+                case .accept: .accepted
+                case .maybe: .tentative
+                case .decline: .declined
+                }
+                self.updateMenu()
+                self.updateTitle()
+                self.dependencies.send(.refreshCalendars)
+            } catch {
+                MeetingBarLogger.calendar.error("RSVP failed: \(String(describing: error), privacy: .public)")
+                menu?.cancelTracking()
+                request.fallbackURL?.openInDefaultBrowser()
+            }
         }
     }
 
@@ -453,6 +534,14 @@ final class StatusBarItemController {
     func openEventInCalendar(sender: NSMenuItem) {
         // The menu attaches the provider-specific calendar URL directly
         // (ical://ekevent/… for EventKit, htmlLink for Google).
+        if let url = sender.representedObject as? URL {
+            url.openInDefaultBrowser()
+        }
+    }
+
+    @objc
+    func openEventDocument(sender: NSMenuItem) {
+        // Documents open in the default browser/app, never the meeting browser.
         if let url = sender.representedObject as? URL {
             url.openInDefaultBrowser()
         }

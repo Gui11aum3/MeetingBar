@@ -281,6 +281,8 @@ struct MenuSection: View {
     @Default(.showMeetingServiceIcon) var showMeetingServiceIcon
     @Default(.showEventCalendarColor) var showEventCalendarColor
     @Default(.showTimelineInMenu) var showTimelineInMenu
+    @Default(.hideFeaturedEventInList) var hideFeaturedEventInList
+    @Default(.meetingPlaceChipMode) var meetingPlaceChipMode
 
     var body: some View {
         Section(header: Text("preferences_appearance_menu_title".loco())) {
@@ -288,6 +290,21 @@ struct MenuSection: View {
                 preferenceLabel("preferences_appearance_menu_show_timeline_toggle"),
                 isOn: $showTimelineInMenu
             )
+            Toggle(
+                preferenceLabel("preferences_appearance_menu_hide_featured_event_toggle"),
+                isOn: $hideFeaturedEventInList
+            )
+            Picker(
+                preferenceLabel("preferences_appearance_menu_place_chip_title"),
+                selection: $meetingPlaceChipMode
+            ) {
+                Text("preferences_appearance_menu_place_chip_office_days".loco()).tag(MeetingPlaceChipMode.officeDays.rawValue)
+                Text("preferences_appearance_menu_place_chip_always".loco()).tag(MeetingPlaceChipMode.always.rawValue)
+                Text("preferences_appearance_menu_place_chip_off".loco()).tag(MeetingPlaceChipMode.off.rawValue)
+            }
+            Text("preferences_appearance_menu_place_chip_hint".loco())
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
 
         Section(header: Text(preferenceLabel("preferences_appearance_menu_show_event_title"))) {

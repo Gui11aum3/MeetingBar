@@ -20,8 +20,9 @@ struct MeetingSummaryPresentation: Equatable {
     }
 
     var sectionTitleText: String {
+        // "Starts in 1h 6m" says more than "Next meeting • in 1h 6m".
         guard let countdown, !countdown.isEmpty else { return sectionTitle }
-        return "\(sectionTitle) • \(countdown)"
+        return countdown
     }
 }
 
@@ -29,15 +30,21 @@ struct MeetingSummaryView: View {
     let presentation: MeetingSummaryPresentation
     let providerIcon: NSImage
     var onJoin: (() -> Void)?
+    /// Global join shortcut, e.g. "⇧⌘D", shown inside the Join pill.
+    var joinShortcut: String?
+    /// false: only the metadata line and Join (expanded event-list rows).
+    var showsHeader = true
 
     @State private var isHovered = false
 
     static let preferredWidth: CGFloat = 380
     static let preferredHeight: CGFloat = 66
+    static let compactHeight: CGFloat = 30
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
+                if showsHeader {
                 Text(presentation.sectionTitleText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -53,6 +60,7 @@ struct MeetingSummaryView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                 }
+                }
 
                 Text(presentation.metadataText)
                     .font(.caption)
@@ -62,7 +70,8 @@ struct MeetingSummaryView: View {
 
             if onJoin != nil {
                 Spacer(minLength: 8)
-                Text("notifications_meetingbar_join_event_action".loco())
+                (Text("notifications_meetingbar_join_event_action".loco())
+                    + Text(joinShortcut.map { "  \($0)" } ?? "").fontWeight(.medium).foregroundColor(.white.opacity(0.75)))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
@@ -71,11 +80,12 @@ struct MeetingSummaryView: View {
                     .opacity(isHovered ? 1.0 : 0.9)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.leading, showsHeader ? 12 : 28)
+        .padding(.trailing, 12)
+        .padding(.vertical, showsHeader ? 6 : 2)
         .frame(
             maxWidth: .infinity,
-            minHeight: Self.preferredHeight,
+            minHeight: showsHeader ? Self.preferredHeight : Self.compactHeight,
             alignment: .leading
         )
         .background(

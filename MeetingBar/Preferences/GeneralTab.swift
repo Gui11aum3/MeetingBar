@@ -145,6 +145,10 @@ struct PatronageAppSection: View {
                     Links.github.openInDefaultBrowser()
                 }
                 .buttonStyle(.link)
+                Button("preferences_general_rate_app".loco()) {
+                    Links.rateAppInAppStore.openInDefaultBrowser()
+                }
+                .buttonStyle(.link)
                 Button("preferences_general_external_contact".loco()) {
                     Links.emailMe.openInDefaultBrowser()
                 }

@@ -245,8 +245,15 @@ func mbEvent(from rawEvent: EKEvent, calendar: MBCalendar, customRegexes: [Strin
     let organizer = MBEventOrganizer(email: rawEvent.organizer?.url.absoluteString, name: rawEvent.organizer?.name)
 
     var attendees: [MBEventAttendee] = []
+    var rooms: [String] = []
 
     for rawAttendee in rawEvent.attendees ?? [] {
+        if rawAttendee.participantType == .room {
+            if rawAttendee.participantStatus != .declined, let name = rawAttendee.name, !name.isEmpty {
+                rooms.append(name)
+            }
+            continue
+        }
         if rawAttendee.participantType != .person {
             continue
         }
@@ -284,7 +291,7 @@ func mbEvent(from rawEvent: EKEvent, calendar: MBCalendar, customRegexes: [Strin
     // dedup collapsing them (34293d6) without eating recurring occurrences.
     // The raw calendarItemIdentifier is still handed to meetingStart scripts
     // via scriptIdentifier so existing user scripts keep their id format.
-    return MBEvent(
+    var event = MBEvent(
         id: "\(rawEvent.calendarItemIdentifier):\(Int(rawEvent.startDate.timeIntervalSince1970))",
         scriptIdentifier: rawEvent.calendarItemIdentifier,
         lastModifiedDate: rawEvent.lastModifiedDate,
@@ -303,6 +310,8 @@ func mbEvent(from rawEvent: EKEvent, calendar: MBCalendar, customRegexes: [Strin
         calendar: calendar,
         customRegexes: customRegexes
     )
+    event.rooms = rooms
+    return event
 }
 
 func eventKitCalendarOpenURL(for identifier: String) -> URL? {
