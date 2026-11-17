@@ -31,6 +31,10 @@ final class DocumentIconProvider {
     }()
 
     func applyIcon(for document: EventDocument, to item: NSMenuItem) {
+        if let googleIcon = Self.googleFileIcon(for: document.kind) {
+            Self.setIcon(googleIcon, on: item)
+            return
+        }
         Self.setIcon(Self.symbol(for: document.kind), on: item)
         guard let iconURL = Self.iconURL(for: document) else { return }
         let key = iconURL.absoluteString
@@ -50,23 +54,61 @@ final class DocumentIconProvider {
             let hiDPI = iconURL.absoluteString.replacingOccurrences(of: "/16/type/", with: "/32/type/")
             return URL(string: hiDPI) ?? iconURL
         }
-        // Google files all live on drive.google.com or docs.google.com, whose
-        // favicon is the Drive logo; use the per-type icon Drive publishes.
-        if let mimeType = googleMimeType(for: document.kind) {
-            return URL(string: "https://drive-thirdparty.googleusercontent.com/32/type/\(mimeType)")
-        }
         guard let host = document.url.host?.lowercased() else { return nil }
         return URL(string: "https://\(host)/favicon.ico")
     }
 
-    private static func googleMimeType(for kind: EventDocumentKind) -> String? {
+    /// Page-shaped icon with a folded corner for Google files, drawn
+    /// locally: Google's own icons are flat squares, and their sites'
+    /// favicon is the Drive logo.
+    static func googleFileIcon(for kind: EventDocumentKind) -> NSImage? {
+        let color: NSColor
         switch kind {
-        case .googleDocs: "application/vnd.google-apps.document"
-        case .googleSheets: "application/vnd.google-apps.spreadsheet"
-        case .googleSlides: "application/vnd.google-apps.presentation"
-        case .googleForms: "application/vnd.google-apps.form"
-        default: nil
+        case .googleDocs: color = NSColor(srgbRed: 0.26, green: 0.52, blue: 0.96, alpha: 1)
+        case .googleSheets: color = NSColor(srgbRed: 0.06, green: 0.62, blue: 0.35, alpha: 1)
+        case .googleSlides: color = NSColor(srgbRed: 0.96, green: 0.71, blue: 0.0, alpha: 1)
+        case .googleForms: color = NSColor(srgbRed: 0.40, green: 0.23, blue: 0.72, alpha: 1)
+        default: return nil
         }
+        let image = NSImage(size: iconSize, flipped: true) { _ in
+            let fold: CGFloat = 4
+            let page = NSBezierPath()
+            page.move(to: NSPoint(x: 3, y: 1))
+            page.line(to: NSPoint(x: 13 - fold, y: 1))
+            page.line(to: NSPoint(x: 13, y: 1 + fold))
+            page.line(to: NSPoint(x: 13, y: 15))
+            page.line(to: NSPoint(x: 3, y: 15))
+            page.close()
+            color.setFill()
+            page.fill()
+            let corner = NSBezierPath()
+            corner.move(to: NSPoint(x: 13 - fold, y: 1))
+            corner.line(to: NSPoint(x: 13 - fold, y: 1 + fold))
+            corner.line(to: NSPoint(x: 13, y: 1 + fold))
+            corner.close()
+            NSColor.white.withAlphaComponent(0.45).setFill()
+            corner.fill()
+            NSColor.white.setFill()
+            switch kind {
+            case .googleDocs:
+                for (y, width) in [(7.0, 6.0), (9.0, 6.0), (11.0, 4.0)] {
+                    NSRect(x: 5, y: y, width: width, height: 1).fill()
+                }
+            case .googleSheets:
+                NSRect(x: 5, y: 7, width: 6, height: 5).frame(withWidth: 1)
+                NSRect(x: 7.5, y: 7, width: 1, height: 5).fill()
+                NSRect(x: 5, y: 9, width: 6, height: 1).fill()
+            case .googleSlides:
+                NSRect(x: 5, y: 7.5, width: 6, height: 4).frame(withWidth: 1)
+            default:
+                for y in [7.0, 9.0, 11.0] {
+                    NSRect(x: 5, y: y, width: 1, height: 1).fill()
+                    NSRect(x: 7, y: y, width: 4, height: 1).fill()
+                }
+            }
+            return true
+        }
+        return image
     }
 
     private func fetchIcon(key: String, url: URL) {
