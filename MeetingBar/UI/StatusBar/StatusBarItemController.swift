@@ -332,9 +332,11 @@ final class StatusBarItemController {
      * ------------------------
      */
 
-    func updateMenu() {
+    /// `force` rebuilds even while the menu is open, for changes the user just
+    /// made from it (an RSVP) that must show right away.
+    func updateMenu(force: Bool = false) {
         // Don't update the menu while it's open to avoid flickering
-        if statusItem.menu != nil {
+        if statusItem.menu != nil, !force {
             return
         }
 
@@ -511,7 +513,7 @@ final class StatusBarItemController {
                 case .maybe: .tentative
                 case .decline: .declined
                 }
-                self.updateMenu()
+                self.updateMenu(force: true)
                 self.updateTitle()
                 self.dependencies.send(.refreshCalendars)
             } catch {
