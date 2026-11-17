@@ -50,8 +50,23 @@ final class DocumentIconProvider {
             let hiDPI = iconURL.absoluteString.replacingOccurrences(of: "/16/type/", with: "/32/type/")
             return URL(string: hiDPI) ?? iconURL
         }
+        // Google files all live on drive.google.com or docs.google.com, whose
+        // favicon is the Drive logo; use the per-type icon Drive publishes.
+        if let mimeType = googleMimeType(for: document.kind) {
+            return URL(string: "https://drive-thirdparty.googleusercontent.com/32/type/\(mimeType)")
+        }
         guard let host = document.url.host?.lowercased() else { return nil }
         return URL(string: "https://\(host)/favicon.ico")
+    }
+
+    private static func googleMimeType(for kind: EventDocumentKind) -> String? {
+        switch kind {
+        case .googleDocs: "application/vnd.google-apps.document"
+        case .googleSheets: "application/vnd.google-apps.spreadsheet"
+        case .googleSlides: "application/vnd.google-apps.presentation"
+        case .googleForms: "application/vnd.google-apps.form"
+        default: nil
+        }
     }
 
     private func fetchIcon(key: String, url: URL) {
