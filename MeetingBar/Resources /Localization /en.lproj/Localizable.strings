@@ -253,6 +253,7 @@
 "status_bar_section_join_next_meeting" = "Join next event meeting";
 "status_bar_section_join_current_meeting" = "Join current event meeting";
 "status_bar_join_with_other_link" = "Join with other link";
+"status_bar_submenu_attachments" = "Attachments";
 "status_bar_section_join_from_clipboard" = "Open meeting from clipboard";
 "status_bar_section_refresh_sources" = "Refresh sources";
 "status_bar_menu_dismiss_curent_meeting" = "Dismiss current meeting";
@@ -267,6 +268,9 @@
 "status_bar_control_actions" = "More actions";
 "status_bar_control_current_meeting" = "Current meeting";
 "status_bar_control_next_meeting" = "Next meeting";
+"status_bar_control_now" = "Now";
+"preferences_appearance_menu_hide_featured_event_toggle" = "Don't repeat the next meeting in the list";
+"status_bar_control_starts_in" = "Starts in %@";
 "status_bar_control_stale" = "Calendar refresh failed — showing last known data";
 "status_bar_control_auth_required" = "Google Calendar needs to be reconnected";
 "status_bar_control_reconnect" = "Reconnect Google Calendar";
@@ -298,16 +302,27 @@
 "status_bar_submenu_attendees_status_tentative" = " [tentative]";
 "status_bar_submenu_attendees_status_unknown" = " [?]";
 "status_bar_submenu_copy_meeting_link" = "Copy meeting link";
-"status_bar_submenu_dismiss_meeting" = "Dismiss meeting";
-"status_bar_submenu_undismiss_meeting" = "Remove dismissal";
+"status_bar_submenu_dismiss_meeting" = "Hide from menu";
+"status_bar_submenu_rsvp_title" = "RSVP";
+"status_bar_submenu_rsvp_accept" = "Accept";
+"status_bar_submenu_rsvp_maybe" = "Maybe";
+"status_bar_submenu_rsvp_decline" = "Decline";
+"status_bar_action_join" = "Join";
+"status_bar_action_yes" = "Yes";
+"status_bar_action_maybe" = "Maybe";
+"status_bar_action_no" = "No";
+"status_bar_details_minutes" = "%@ min";
+"status_bar_details_with" = "with %@";
+"status_bar_details_people" = "%@ people · %@ going";
+"status_bar_submenu_undismiss_meeting" = "Show in menu";
 "status_bar_submenu_email_attendees" = "Email attendees";
 "status_bar_submenu_open_in_calendar" = "Open in Calendar App";
 "status_bar_submenu_open_in_fantastical" = "Open in Fantastical";
-"status_bar_quick_actions" = "Quick Actions";
+"status_bar_quick_actions" = "Quick actions";
 "status_bar_show_meeting_names" = "Show meeting title";
 "status_bar_hide_meeting_names" = "Hide meeting title";
 "status_bar_whats_new" = "What's new?";
-"status_bar_rate_app" = "Rate App";
+"status_bar_rate_app" = "Rate app";
 "status_bar_preferences" = "Preferences";
 "status_bar_quit" = "Quit MeetingBar";
 "status_bar_no_title" = "No title";
@@ -427,3 +442,17 @@
 // MARK: - What's New
 
 "changelog_full_release_notes" = "Full release notes on GitHub";
+
+"status_bar_day_summary_none" = "No more meetings";
+"status_bar_day_summary_one" = "1 left";
+"status_bar_day_summary_many" = "%d left";
+"status_bar_day_summary_free_from" = "free from %@";
+"status_bar_footer_updated_now" = "Updated just now";
+"status_bar_footer_updated_minutes" = "Updated %d min ago";
+"status_bar_footer_offline" = "Offline";
+"preferences_general_rate_app" = "Rate on the App Store";
+"preferences_appearance_menu_place_chip_title" = "Show meeting room or location";
+"preferences_appearance_menu_place_chip_office_days" = "On office days";
+"preferences_appearance_menu_place_chip_always" = "Always";
+"preferences_appearance_menu_place_chip_off" = "Off";
+"preferences_appearance_menu_place_chip_hint" = "Office days come from your Google Calendar working location. Without one, rooms are always shown.";

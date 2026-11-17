@@ -6,6 +6,7 @@
 //  Copyright © 2021 Andrii Leitsius. All rights reserved.
 //
 
+import AppAuth
 import AppAuthCore
 import AppKit
 import Defaults
@@ -110,6 +111,11 @@ final class GCEventStore: NSObject,
     private static let kClientSecret: String? = ["", "NONE"].contains(googleClientSecret) ? nil : googleClientSecret
     private static let kRedirectURI  = "com.googleusercontent.apps.\(googleClientNumber):/oauthredirect"
     private static let kKeychainName = googleAuthKeychainName
+    /// Desktop-type OAuth clients only accept loopback redirects
+    /// (http://127.0.0.1:port), not the reverse-client-ID URL scheme.
+    private static let usesLoopbackRedirect =
+        (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_OAUTH_LOOPBACK") as? String)?.uppercased() == "YES"
+    private var loopbackHandler: OIDRedirectHTTPHandler?
 
     // MARK: Stored properties
     @MainActor var currentAuthorizationFlow: OIDExternalUserAgentSession? {
@@ -208,11 +214,21 @@ final class GCEventStore: NSObject,
 
     private func performAuthorization(forcePrompt: Bool) async throws {
         // Placeholder GOOGLE_CLIENT_NUMBER (local builds) yields an invalid redirect URL
-        guard let redirectURL = URL(string: Self.kRedirectURI) else {
+        guard var redirectURL = URL(string: Self.kRedirectURI) else {
             MeetingBarLogger.calendar.error("Google OAuth client is not configured in this build")
             throw NSError(domain: "GoogleSignIn", code: -2, userInfo: [
                 NSLocalizedDescriptionKey: "Google sign-in is not configured in this build (GOOGLE_CLIENT_NUMBER)."
             ])
+        }
+
+        if Self.usesLoopbackRedirect {
+            loopbackHandler?.cancelHTTPListener()
+            let handler = OIDRedirectHTTPHandler(successURL: nil)
+            var listenError: NSError?
+            let loopbackURL = handler.startHTTPListener(&listenError)
+            if let listenError { throw listenError }
+            loopbackHandler = handler
+            redirectURL = loopbackURL
         }
 
         // This also completes the previous sign-in awaiter if it was still
@@ -236,7 +252,11 @@ final class GCEventStore: NSObject,
         let scopes = [
             "email",
             "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-            "https://www.googleapis.com/auth/calendar.events.readonly"
+            "https://www.googleapis.com/auth/calendar.events.readonly",
+            // Accept / Maybe / Decline from the menu (only your own response is changed).
+            Self.respondScope,
+            // File names/icons of Drive links in invites (#917); never contents.
+            GoogleDriveMetadataResolver.scope
         ]
 
         // additional parameters to be sure we get refresh_token
@@ -284,6 +304,7 @@ final class GCEventStore: NSObject,
                 }
             }
             authorizationFlow.setSession(session, for: generation)
+            loopbackHandler?.currentAuthorizationFlow = session
         }
     }
 
@@ -350,6 +371,44 @@ final class GCEventStore: NSObject,
         }
     }
 
+    static let respondScope = "https://www.googleapis.com/auth/calendar.events"
+
+    enum RespondError: Error {
+        case missingScope, notAnAttendee, badResponse(Int)
+    }
+
+    /// Sets the signed-in user's response on an event and notifies the
+    /// organizer. Only the user's own attendee entry is modified.
+    func respond(to request: EventResponseRequest) async throws {
+        MeetingBarLogger.calendar.info("RSVP \(request.response.rawValue, privacy: .public): start; scopes=\(self.authState?.scope ?? "nil", privacy: .public)")
+        guard authState?.scope?.contains(Self.respondScope) == true else { throw RespondError.missingScope }
+        var components = URLComponents(string: "https://www.googleapis.com")!
+        components.path = "/calendar/v3/calendars/\(request.calendarID)/events/\(request.eventID)"
+        guard let eventURL = components.url else { throw RespondError.badResponse(0) }
+
+        var get = URLRequest(url: eventURL)
+        get.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
+        let (data, getResponse) = try await urlSession.data(for: get)
+        let getStatus = (getResponse as? HTTPURLResponse)?.statusCode ?? 0
+        MeetingBarLogger.calendar.info("RSVP GET status \(getStatus, privacy: .public)")
+        guard getStatus == 200 else { throw RespondError.badResponse(getStatus) }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let attendees = EventResponsePolicy.googleAttendees(
+            json?["attendees"] as? [[String: Any]] ?? [], responding: request.response
+        ) else { throw RespondError.notAnAttendee }
+
+        components.queryItems = [URLQueryItem(name: "sendUpdates", value: "all")]
+        var patch = URLRequest(url: components.url ?? eventURL)
+        patch.httpMethod = "PATCH"
+        patch.setValue("Bearer \(try await validAccessToken())", forHTTPHeaderField: "Authorization")
+        patch.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        patch.httpBody = try JSONSerialization.data(withJSONObject: ["attendees": attendees])
+        let (patchData, patchResponse) = try await urlSession.data(for: patch)
+        let patchStatus = (patchResponse as? HTTPURLResponse)?.statusCode ?? 0
+        MeetingBarLogger.calendar.info("RSVP PATCH status \(patchStatus, privacy: .public) \(patchStatus == 200 ? "" : String(decoding: patchData.prefix(400), as: UTF8.self), privacy: .public)")
+        guard patchStatus == 200 else { throw RespondError.badResponse(patchStatus) }
+    }
+
     func cancelPendingOperations() {
         authorizationFlow.cancel()
         pendingRefresh?.task.cancel()
@@ -363,7 +422,9 @@ final class GCEventStore: NSObject,
         return try await makeDataReader().fetchCalendars()
     }
 
-    static func eventsURL(calendarID: String, timeMin: String, timeMax: String) throws -> URL {
+    static func eventsURL(
+        calendarID: String, timeMin: String, timeMax: String, eventType: String = "default"
+    ) throws -> URL {
         // Calendar IDs can contain `#`, `@`, `+`, and group-address punctuation.
         // Path interpolation without escaping breaks for those calendars
         // (Google returns 404). Build the path via `URLComponents.path` so
@@ -375,7 +436,7 @@ final class GCEventStore: NSObject,
         comps.queryItems = [
             .init(name: "singleEvents", value: "true"),
             .init(name: "orderBy", value: "startTime"),
-            .init(name: "eventTypes", value: "default"),
+            .init(name: "eventTypes", value: eventType),
             .init(name: "timeMax", value: timeMax),
             .init(name: "timeMin", value: timeMin)
         ]
@@ -392,8 +453,28 @@ final class GCEventStore: NSObject,
         to: Date
     ) async throws -> [MBEvent] {
         try requireReusableSession()
-        return try await makeDataReader().fetchEvents(for: calendars, from: from, to: to)
+        let reader = makeDataReader()
+        let events = try await reader.fetchEvents(for: calendars, from: from, to: to)
+        // Office / home days decide whether meeting rooms are shown. Best
+        // effort: a failure here must not fail the event refresh.
+        if let locations = try? await reader.fetchWorkingLocations(from: from, to: to) {
+            Defaults[.workingLocationsByDay] = locations.mapValues(\.rawValue)
+        }
+        // Sessions granted before the Drive scope existed keep working; their
+        // documents just keep fallback titles until the user reconnects.
+        guard authState?.scope?.contains(GoogleDriveMetadataResolver.scope) == true else {
+            return events
+        }
+        return await driveMetadataResolver.resolveDocuments(in: events)
     }
+
+    private lazy var driveMetadataResolver: GoogleDriveMetadataResolver = {
+        let session = urlSession
+        return GoogleDriveMetadataResolver(
+            transport: { request in try await session.data(for: request) },
+            accessToken: { [unowned self] in try await validAccessToken() }
+        )
+    }()
 
     private func makeDataReader() -> GoogleCalendarDataReader {
         GoogleCalendarDataReader(userEmail: userEmail) { [self] url, calendarID in
@@ -706,8 +787,16 @@ final class GCEventStore: NSObject,
             let organizer = MBEventOrganizer(email: organizerRaw?["email"] as? String, name: organizerRaw?["name"] as? String)
 
             var attendees: [MBEventAttendee] = []
+            var rooms: [String] = []
             let rawAttendees = item["attendees"] as? [[String: Any]] ?? []
             for jsonAttendee in rawAttendees {
+                if jsonAttendee["resource"] as? Bool == true {
+                    if jsonAttendee["responseStatus"] as? String != "declined",
+                       let room = jsonAttendee["displayName"] as? String, !room.isEmpty {
+                        rooms.append(room)
+                    }
+                    continue
+                }
                 let email = jsonAttendee["email"] as? String
                 let name = jsonAttendee["displayName"] as? String
                 let optional = jsonAttendee["optional"] as? Bool ?? false
@@ -777,7 +866,14 @@ final class GCEventStore: NSObject,
             // Calendar" since `ical://ekevent/<google-id>` is not valid.
             let calendarOpenURL = (item["htmlLink"] as? String).flatMap(URL.init(string:))
 
-            return MBEvent(
+            // Drive attachments added to the invite. Only the metadata the
+            // events API already returns is used.
+            let attachments: [EventAttachmentInput] = (item["attachments"] as? [[String: Any]] ?? []).compactMap { raw in
+                guard let url = (raw["fileUrl"] as? String).flatMap(URL.init(string:)) else { return nil }
+                return EventAttachmentInput(url: url, title: raw["title"] as? String, mimeType: raw["mimeType"] as? String)
+            }
+
+            var event = MBEvent(
                 id: eventID,
                 lastModifiedDate: lastModifiedDate,
                 title: title,
@@ -794,8 +890,22 @@ final class GCEventStore: NSObject,
                 isAllDay: isAllDay,
                 recurrent: recurrent,
                 calendar: calendar,
+                attachments: attachments,
                 customRegexes: Defaults[.customRegexes]
             )
+            event.rooms = rooms
+            if let colorID = item["colorId"] as? String, let hex = googleEventColors[colorID] {
+                event.eventColor = hexStringToUIColor(hex: hex)
+            }
+            return event
         }
     }
 }
+
+/// Google Calendar's event colour palette, as shown in its web UI.
+private let googleEventColors: [String: String] = [
+    "1": "#7986cb", "2": "#33b679", "3": "#8e24aa", "4": "#e67c73",
+    "5": "#f6bf26", "6": "#f4511e", "7": "#039be5", "8": "#616161",
+    "9": "#3f51b5", "10": "#0b8043", "11": "#d50000"
+]
+

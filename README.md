@@ -122,6 +122,23 @@ MeetingBar is open source and welcomes focused fixes, meeting service integratio
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
+### Building with Google Calendar
+
+Google sign-in needs your own OAuth client. Credentials never go in the repo:
+
+1. In Google Cloud Console, enable the Google Calendar API (and the Drive API for attachment titles), then create an OAuth client of type **Desktop app**.
+2. Create `XCConfig/DevTeamOverride.xcconfig` (git-ignored) with:
+
+   ```
+   DEVELOPMENT_TEAM = <your team ID>
+   GOOGLE_CLIENT_NUMBER = <client ID without .apps.googleusercontent.com>
+   GOOGLE_CLIENT_SECRET = <client secret>
+   GOOGLE_AUTH_KEYCHAIN_NAME = MeetingBar-GoogleAuth
+   GOOGLE_OAUTH_LOOPBACK = YES
+   ```
+
+3. Build the `MeetingBar` scheme. `GOOGLE_OAUTH_LOOPBACK = YES` returns sign-in through `http://127.0.0.1`, which Desktop clients require.
+
 ## Support the project
 
 MeetingBar is free and community-supported.

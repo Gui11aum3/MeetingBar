@@ -40,6 +40,8 @@
 		<string>$(GOOGLE_AUTH_KEYCHAIN_NAME)</string>
 		<key>GOOGLE_CLIENT_NUMBER</key>
 		<string>$(GOOGLE_CLIENT_NUMBER)</string>
+		<key>GOOGLE_OAUTH_LOOPBACK</key>
+		<string>$(GOOGLE_OAUTH_LOOPBACK)</string>
 		<key>GOOGLE_CLIENT_SECRET</key>
 		<string>$(GOOGLE_CLIENT_SECRET)</string>
 		<key>LSApplicationCategoryType</key>

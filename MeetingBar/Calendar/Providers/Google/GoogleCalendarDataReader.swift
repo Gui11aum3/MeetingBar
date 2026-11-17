@@ -72,4 +72,40 @@ struct GoogleCalendarDataReader {
             forbiddenErrors: forbiddenErrors
         )
     }
+
+    /// Working location per local day ("yyyy-MM-dd") from the primary calendar.
+    func fetchWorkingLocations(from: Date, to: Date) async throws -> [String: WorkingLocationKind] {
+        let formatter = ISO8601DateFormatter()
+        let url = try GCEventStore.eventsURL(
+            calendarID: "primary",
+            timeMin: formatter.string(from: from),
+            timeMax: formatter.string(from: to),
+            eventType: "workingLocation"
+        )
+        let items = try await fetchJSON(url, "primary")
+        return Self.workingLocations(from: items)
+    }
+
+    static func workingLocations(from items: [[String: Any]]) -> [String: WorkingLocationKind] {
+        let isoFormatter = ISO8601DateFormatter()
+        var result: [String: WorkingLocationKind] = [:]
+        for item in items {
+            guard let properties = item["workingLocationProperties"] as? [String: Any],
+                  let start = item["start"] as? [String: Any] else { continue }
+            let day: String
+            if let date = start["date"] as? String {
+                day = date
+            } else if let dateTime = (start["dateTime"] as? String).flatMap(isoFormatter.date(from:)) {
+                day = MeetingPlacePolicy.dayKey(dateTime)
+            } else {
+                continue
+            }
+            switch properties["type"] as? String {
+            case "officeLocation": result[day] = .office
+            case "homeOffice": result[day] = result[day] ?? .home
+            default: result[day] = result[day] ?? .other
+            }
+        }
+        return result
+    }
 }
