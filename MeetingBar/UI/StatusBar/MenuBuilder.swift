@@ -1376,7 +1376,9 @@ struct MenuBuilder {
         let item = NSMenuItem(title: "status_bar_control_actions".loco(), action: nil, keyEquivalent: "")
         item.representedObject = event
         let submenu = NSMenu(title: "status_bar_control_actions".loco())
-        addEventActions(to: submenu, event: event, includeResponses: false)
+        // The answers are repeated here so they can be picked by keyboard:
+        // → opens this submenu, then Y / M / N.
+        addEventActions(to: submenu, event: event, includeResponses: true)
         item.submenu = submenu
 
         let controller = target as? StatusBarItemController
@@ -1718,18 +1720,20 @@ struct MenuBuilder {
     /// meeting in MeetingBar). The current answer is check-marked.
     private func addEventResponseActions(to menu: NSMenu, event: MBEvent) {
         guard !event.attendees.isEmpty, event.endDate > now else { return }
-        let responses: [(EventResponse, String, MBEventAttendeeStatus)] = [
-            (.accept, "status_bar_submenu_rsvp_accept", .accepted),
-            (.maybe, "status_bar_submenu_rsvp_maybe", .tentative),
-            (.decline, "status_bar_submenu_rsvp_decline", .declined)
+        // Plain Y / M / N answer while this submenu is open.
+        let responses: [(EventResponse, String, MBEventAttendeeStatus, String)] = [
+            (.accept, "status_bar_submenu_rsvp_accept", .accepted, "y"),
+            (.maybe, "status_bar_submenu_rsvp_maybe", .tentative, "m"),
+            (.decline, "status_bar_submenu_rsvp_decline", .declined, "n")
         ]
         var items: [NSMenuItem] = []
-        for (response, key, status) in responses {
+        for (response, key, status, shortcut) in responses {
             let item = NSMenuItem(
                 title: key.loco(),
                 action: #selector(StatusBarItemController.respondToEvent(sender:)),
-                keyEquivalent: ""
+                keyEquivalent: shortcut
             )
+            item.keyEquivalentModifierMask = []
             item.target = target
             item.representedObject = EventResponseRequest(
                 response: response,
