@@ -53,7 +53,15 @@ struct MeetingActionBarView: View {
                             }
                             onRespond(item.0)
                         } label: {
-                            Text(item.1.loco())
+                            // The current answer carries a checkmark, so it
+                            // reads as chosen, not just slightly darker.
+                            if response == item.0 {
+                                Label(item.1.loco(), systemImage: "checkmark")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(.system(size: 12, weight: .semibold))
+                            } else {
+                                Text(item.1.loco())
+                            }
                         }
                         .buttonStyle(BarButtonStyle(kind: response == item.0 ? .selected : .plain))
                         .accessibilityAddTraits(response == item.0 ? .isSelected : [])
@@ -128,7 +136,7 @@ private struct PressableLabel: View {
     private var background: Color {
         switch kind {
         case .primary: .accentColor
-        case .selected: Color.primary.opacity(isHovered ? 0.14 : 0.10)
+        case .selected: Color.primary.opacity(isHovered ? 0.20 : 0.16)
         case .plain: Color.primary.opacity(isHovered ? 0.09 : 0.05)
         }
     }
@@ -136,7 +144,7 @@ private struct PressableLabel: View {
     private var border: Color {
         switch kind {
         case .primary: .clear
-        case .selected: Color.primary.opacity(0.25)
+        case .selected: Color.primary.opacity(0.45)
         case .plain: Color.primary.opacity(0.12)
         }
     }
