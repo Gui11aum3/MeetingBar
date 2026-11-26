@@ -18,6 +18,9 @@ struct MeetingActionBarView: View {
     var onRespond: (EventResponse) -> Void = { _ in }
 
     @State var response: EventResponse?
+    /// Once answered, the three choices fold into one "✓ Going" pill;
+    /// tapping it shows them again.
+    @State private var isChoosing = false
 
     static let height: CGFloat = 30
 
@@ -30,15 +33,29 @@ struct MeetingActionBarView: View {
                 .buttonStyle(BarButtonStyle(kind: .primary))
             }
             if showsResponses {
-                ForEach(Self.responses, id: \.0) { item in
+                if let response, !isChoosing {
                     Button {
-                        response = item.0
-                        onRespond(item.0)
+                        isChoosing = true
                     } label: {
-                        Text(item.1.loco())
+                        Label(Self.answeredTitle(response).loco(), systemImage: "checkmark")
+                            .labelStyle(.titleAndIcon)
                     }
-                    .buttonStyle(BarButtonStyle(kind: response == item.0 ? .selected : .plain))
-                    .accessibilityAddTraits(response == item.0 ? .isSelected : [])
+                    .buttonStyle(BarButtonStyle(kind: .selected))
+                    .accessibilityAddTraits(.isSelected)
+                } else {
+                    ForEach(Self.responses, id: \.0) { item in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                response = item.0
+                                isChoosing = false
+                            }
+                            onRespond(item.0)
+                        } label: {
+                            Text(item.1.loco())
+                        }
+                        .buttonStyle(BarButtonStyle(kind: response == item.0 ? .selected : .plain))
+                        .accessibilityAddTraits(response == item.0 ? .isSelected : [])
+                    }
                 }
             }
             Spacer(minLength: 8)
@@ -50,6 +67,14 @@ struct MeetingActionBarView: View {
         .padding(.leading, leading)
         .padding(.trailing, 14)
         .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .leading)
+    }
+
+    private static func answeredTitle(_ response: EventResponse) -> String {
+        switch response {
+        case .accept: "status_bar_action_answered_yes"
+        case .maybe: "status_bar_action_answered_maybe"
+        case .decline: "status_bar_action_answered_no"
+        }
     }
 
     private static let responses: [(EventResponse, String)] = [
@@ -78,7 +103,7 @@ private struct BarButtonStyle: ButtonStyle {
     private var foreground: Color {
         switch kind {
         case .primary: .white
-        case .selected: .accentColor
+        case .selected: .primary
         case .plain: .primary
         }
     }
@@ -86,7 +111,7 @@ private struct BarButtonStyle: ButtonStyle {
     private var background: Color {
         switch kind {
         case .primary: .accentColor
-        case .selected: .accentColor.opacity(0.14)
+        case .selected: Color.primary.opacity(0.10)
         case .plain: Color.primary.opacity(0.05)
         }
     }
@@ -94,7 +119,7 @@ private struct BarButtonStyle: ButtonStyle {
     private var border: Color {
         switch kind {
         case .primary: .clear
-        case .selected: .accentColor.opacity(0.5)
+        case .selected: Color.primary.opacity(0.25)
         case .plain: Color.primary.opacity(0.12)
         }
     }

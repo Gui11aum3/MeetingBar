@@ -282,7 +282,9 @@ final class MenuBuilderTests: BaseTestCase {
             .buildMeetingControlSection()
 
         let actions = try XCTUnwrap(items.first {
+            // Without Yes / Maybe / No the card itself carries the actions.
             $0.title == "status_bar_control_actions".loco()
+                || $0.identifier == MenuBuilder.meetingSummaryItemIdentifier
         }?.submenu?.items)
 
         // Summary card is the primary (first) item and carries the event
@@ -457,7 +459,9 @@ final class MenuBuilderTests: BaseTestCase {
         let items = MenuBuilder(target: Dummy(), state: state, now: now)
             .buildMeetingControlSection()
         let actions = try XCTUnwrap(items.first {
+            // Without Yes / Maybe / No the card itself carries the actions.
             $0.title == "status_bar_control_actions".loco()
+                || $0.identifier == MenuBuilder.meetingSummaryItemIdentifier
         }?.submenu?.items)
 
         // Summary card is shown but carries no join action

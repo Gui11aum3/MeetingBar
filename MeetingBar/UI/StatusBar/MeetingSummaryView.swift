@@ -34,6 +34,8 @@ struct MeetingSummaryView: View {
     var joinShortcut: String?
     /// false: only the metadata line and Join (expanded event-list rows).
     var showsHeader = true
+    /// Shows ⋯ when the card itself opens the other actions.
+    var showsMore = false
 
     @State private var isHovered = false
 
@@ -80,6 +82,13 @@ struct MeetingSummaryView: View {
                     .padding(.vertical, 5)
                     .background(Capsule().fill(Color.accentColor))
                     .opacity(isHovered ? 1.0 : 0.9)
+            }
+            if showsMore {
+                if onJoin == nil { Spacer(minLength: 8) }
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("status_bar_control_actions".loco())
             }
         }
         .padding(.leading, showsHeader ? 17 : 28)

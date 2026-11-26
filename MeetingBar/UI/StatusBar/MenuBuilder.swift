@@ -103,8 +103,16 @@ struct MenuBuilder {
         items.append(makeMeetingSummaryItem(for: event))
         items.append(contentsOf: makeRoomChipsItem(for: event, leading: Self.contentLeading, prominent: true).map { [$0] } ?? [])
         items.append(contentsOf: makeFeaturedDocumentItems(for: event))
-        // The card already has Join; the bar adds the answer and the rest.
-        items.append(makeActionBarItem(for: event, showsJoin: false, leading: Self.contentLeading))
+        if Self.canRespond(to: event, now: now) {
+            // The card already has Join; the bar adds the answer and the rest.
+            items.append(makeActionBarItem(for: event, showsJoin: false, leading: Self.contentLeading))
+        } else if let summary = items.first {
+            // Nothing to answer: no extra row. The card itself opens the
+            // other actions, marked with ⋯.
+            let submenu = NSMenu(title: "status_bar_control_actions".loco())
+            addEventActions(to: submenu, event: event, includeResponses: false)
+            summary.submenu = submenu
+        }
         items.append(contentsOf: buildProviderWarningItems())
         return items
     }
@@ -127,8 +135,16 @@ struct MenuBuilder {
         let calendarName = event.calendar.title.contains("@") ? nil : event.calendar.title
 
         let countdown: String?
-        if isCurrent || event.isAllDay {
+        if event.isAllDay {
             countdown = nil
+        } else if isCurrent {
+            // The one thing you check during a meeting: how long is left.
+            let timeLeft = StatusBarTitlePolicy.formattedTimeLeft(
+                from: now,
+                to: event.endDate,
+                calendar: Calendar.current
+            )
+            countdown = timeLeft.isEmpty ? nil : "status_bar_control_now_ends_in".loco(timeLeft)
         } else {
             let timeLeft = StatusBarTitlePolicy.formattedTimeLeft(
                 from: now,
@@ -309,7 +325,8 @@ struct MenuBuilder {
                 ? NSImage(size: .zero)
                 : getIconForMeetingService(presentation.meetingService),
             onJoin: onJoin,
-            joinShortcut: KeyboardShortcuts.getShortcut(for: .joinEventShortcut)?.description
+            joinShortcut: KeyboardShortcuts.getShortcut(for: .joinEventShortcut)?.description,
+            showsMore: !Self.canRespond(to: event, now: now)
         )
         let hosting = NSHostingView(rootView: summary)
         hosting.frame = NSRect(
