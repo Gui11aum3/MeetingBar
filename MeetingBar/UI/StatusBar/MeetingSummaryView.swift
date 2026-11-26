@@ -44,6 +44,8 @@ struct MeetingSummaryView: View {
     var extraAttendees = 0
 
     @State private var isHovered = false
+    /// Feedback on press-down, not on release.
+    @State private var isPressed = false
 
     static let preferredWidth: CGFloat = 380
     static let preferredHeight: CGFloat = 76
@@ -69,6 +71,7 @@ struct MeetingSummaryView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 }
 
@@ -106,6 +109,8 @@ struct MeetingSummaryView: View {
                     .frame(height: 28)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor))
                     .opacity(isHovered ? 1.0 : 0.9)
+                    .scaleEffect(isPressed ? 0.97 : 1)
+                    .animation(.easeOut(duration: 0.1), value: isPressed)
             }
             if showsMore {
                 if onJoin == nil { Spacer(minLength: 8) }
@@ -125,8 +130,9 @@ struct MeetingSummaryView: View {
         )
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered && onJoin != nil ? Color.primary.opacity(0.15) : Color.clear)
+                .fill(isHovered && onJoin != nil ? Color.primary.opacity(0.06) : Color.clear)
         )
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
@@ -137,6 +143,11 @@ struct MeetingSummaryView: View {
                 NSCursor.pop()
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in if onJoin != nil, !isPressed { isPressed = true } }
+                .onEnded { _ in isPressed = false }
+        )
         .onTapGesture { onJoin?() }
     }
 }

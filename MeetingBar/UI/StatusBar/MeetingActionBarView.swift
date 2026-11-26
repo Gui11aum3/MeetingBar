@@ -21,6 +21,7 @@ struct MeetingActionBarView: View {
     /// Once answered, the three choices fold into one "✓ Going" pill;
     /// tapping it shows them again.
     @State private var isChoosing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let height: CGFloat = 30
 
@@ -45,7 +46,8 @@ struct MeetingActionBarView: View {
                 } else {
                     ForEach(Self.responses, id: \.0) { item in
                         Button {
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            // Strong ease-out, under 200 ms; none with Reduce Motion.
+                            withAnimation(reduceMotion ? nil : .timingCurve(0.23, 1, 0.32, 1, duration: 0.18)) {
                                 response = item.0
                                 isChoosing = false
                             }
@@ -89,6 +91,18 @@ private struct BarButtonStyle: ButtonStyle {
     let kind: Kind
 
     func makeBody(configuration: Configuration) -> some View {
+        PressableLabel(configuration: configuration, kind: kind)
+    }
+}
+
+/// Scales to 0.97 the moment it's pressed and tints on hover, so every
+/// button answers before the click completes.
+private struct PressableLabel: View {
+    let configuration: ButtonStyleConfiguration
+    let kind: BarButtonStyle.Kind
+    @State private var isHovered = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 12))
             .padding(.horizontal, 9)
@@ -96,8 +110,11 @@ private struct BarButtonStyle: ButtonStyle {
             .foregroundStyle(foreground)
             .background(RoundedRectangle(cornerRadius: 6).fill(background))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(border))
-            .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.15), value: isHovered)
             .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
     }
 
     private var foreground: Color {
@@ -111,8 +128,8 @@ private struct BarButtonStyle: ButtonStyle {
     private var background: Color {
         switch kind {
         case .primary: .accentColor
-        case .selected: Color.primary.opacity(0.10)
-        case .plain: Color.primary.opacity(0.05)
+        case .selected: Color.primary.opacity(isHovered ? 0.14 : 0.10)
+        case .plain: Color.primary.opacity(isHovered ? 0.09 : 0.05)
         }
     }
 

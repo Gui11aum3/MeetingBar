@@ -25,6 +25,9 @@ struct RoomChipsView: View {
                     Text(room)
                         .font(.system(size: 11, weight: prominent ? .medium : .regular))
                         .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 180, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
                 .padding(.horizontal, 8)
