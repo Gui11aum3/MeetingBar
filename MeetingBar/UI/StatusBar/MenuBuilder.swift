@@ -101,10 +101,10 @@ struct MenuBuilder {
     private func buildMeetingControlSection(event: MBEvent) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         items.append(makeMeetingSummaryItem(for: event))
-        items.append(contentsOf: makeRoomChipsItem(for: event, leading: 12, prominent: true).map { [$0] } ?? [])
+        items.append(contentsOf: makeRoomChipsItem(for: event, leading: Self.contentLeading, prominent: true).map { [$0] } ?? [])
         items.append(contentsOf: makeFeaturedDocumentItems(for: event))
         // The card already has Join; the bar adds the answer and the rest.
-        items.append(makeActionBarItem(for: event, showsJoin: false, leading: 15))
+        items.append(makeActionBarItem(for: event, showsJoin: false, leading: Self.contentLeading))
         items.append(contentsOf: buildProviderWarningItems())
         return items
     }
@@ -304,7 +304,10 @@ struct MenuBuilder {
         let presentation = meetingSummaryPresentation(for: event)
         let summary = MeetingSummaryView(
             presentation: presentation,
-            providerIcon: getIconForMeetingService(presentation.meetingService),
+            // No call link: no icon, so the title starts at the left edge.
+            providerIcon: presentation.meetingService == nil
+                ? NSImage(size: .zero)
+                : getIconForMeetingService(presentation.meetingService),
             onJoin: onJoin,
             joinShortcut: KeyboardShortcuts.getShortcut(for: .joinEventShortcut)?.description
         )
@@ -363,7 +366,9 @@ struct MenuBuilder {
         let titleItem: NSMenuItem
         if usesDaySummaryLayout {
             // Notion-style: the day name alone, small and grey.
-            titleItem = Self.dayLabelItem(title)
+            // Days after the first get breathing room above their title.
+            let isToday = Calendar.current.isDate(date, inSameDayAs: now)
+            titleItem = Self.dayLabelItem(title, topGap: isToday ? 0 : 8)
         } else if #available(macOS 14.0, *) {
             titleItem = NSMenuItem.sectionHeader(title: dateTitle)
         } else {
@@ -493,25 +498,29 @@ struct MenuBuilder {
     }
 
     /// The day title ("Today", "Tomorrow"), bold and black.
-    static func dayLabelItem(_ title: String) -> NSMenuItem {
+    static func dayLabelItem(_ title: String, topGap: CGFloat = 0) -> NSMenuItem {
         labelItem(
             title,
             font: NSFont.systemFont(ofSize: MenuStyleConstants.defaultFontSize + 2, weight: .semibold),
-            color: .labelColor
+            color: .labelColor,
+            topGap: topGap
         )
     }
 
     /// A text row drawn by a plain label view so the menu doesn't grey it out
     /// like a disabled row.
-    static func labelItem(_ text: String, font: NSFont, color: NSColor) -> NSMenuItem {
+    /// Left edge shared by day titles, the summary card and event rows.
+    static let contentLeading: CGFloat = 17
+
+    static func labelItem(_ text: String, font: NSFont, color: NSColor, topGap: CGFloat = 0) -> NSMenuItem {
         let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
         let label = NSTextField(labelWithString: text)
         label.font = font
         label.textColor = color
         label.sizeToFit()
-        let height = ceil(label.frame.height) + 6
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: label.frame.width + 28, height: height))
-        label.frame.origin = NSPoint(x: 14, y: 2)
+        let height = ceil(label.frame.height) + 6 + topGap
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: label.frame.width + 34, height: height))
+        label.frame.origin = NSPoint(x: contentLeading, y: 2)
         container.addSubview(label)
         container.autoresizingMask = [.width]
         item.view = container

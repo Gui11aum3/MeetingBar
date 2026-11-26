@@ -50,10 +50,12 @@ struct MeetingSummaryView: View {
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 7) {
-                    Image(nsImage: providerIcon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 16, height: 16)
+                    if providerIcon.size.width > 0 {
+                        Image(nsImage: providerIcon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 16, height: 16)
+                    }
 
                     Text(presentation.eventTitle)
                         .font(.system(size: 14, weight: .semibold))
@@ -80,7 +82,7 @@ struct MeetingSummaryView: View {
                     .opacity(isHovered ? 1.0 : 0.9)
             }
         }
-        .padding(.leading, showsHeader ? 12 : 28)
+        .padding(.leading, showsHeader ? 17 : 28)
         .padding(.trailing, 12)
         .padding(.vertical, showsHeader ? 6 : 2)
         .frame(
