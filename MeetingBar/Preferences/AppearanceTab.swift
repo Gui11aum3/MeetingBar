@@ -82,7 +82,17 @@ struct EventsSection: View {
             }
         }
 
-        Section {
+        Section(
+            header: Text("preferences_appearance_events_answers_title".loco()),
+            footer: Text("preferences_appearance_events_answers_hint".loco())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        ) {
+            AnswerStylesPreview(
+                pending: showPendingEvents,
+                tentative: showTentativeEvents,
+                declined: declinedEventsAppereance
+            )
             Picker(
                 preferenceLabel("preferences_appearance_events_pending_title"),
                 selection: $showPendingEvents
@@ -198,23 +208,23 @@ struct StatusBarSection: View {
                     .tag(EventTitleFormat.none)
             }
 
-            HStack {
-                Spacer()
-                Stepper(
-                    value: $statusbarEventTitleLength,
-                    in: statusbarEventTitleLengthLimits.min ... statusbarEventTitleLengthLimits.max,
-                    step: 5
-                ) {
-                    Text(
-                        "preferences_appearance_status_bar_title_shorten_stepper".loco(
-                            statusbarEventTitleLength)
+            // Only relevant when the title is shown, so only shown then.
+            if eventTitleFormat == .show {
+                HStack {
+                    Text("preferences_appearance_status_bar_title_length_label".loco())
+                    Spacer()
+                    Text("preferences_appearance_status_bar_title_shorten_value".loco(statusbarEventTitleLength))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Stepper(
+                        "",
+                        value: $statusbarEventTitleLength,
+                        in: statusbarEventTitleLengthLimits.min ... statusbarEventTitleLengthLimits.max,
+                        step: 5
                     )
-                    .monospacedDigit()
+                    .labelsHidden()
                 }
-                .fixedSize()
             }
-            .padding(.leading, 16)
-            .disabled(eventTitleFormat != .show)
 
             Picker(
                 preferenceLabel("preferences_appearance_status_bar_time_title"),
@@ -355,4 +365,83 @@ struct MenuSection: View {
 
 #Preview {
     AppearanceTab().frame(width: 700, height: 620)
+}
+
+/// How the menu will draw meetings for each answer, updated as the
+/// settings change, so nobody has to guess what "show as inactive" means.
+private struct AnswerStylesPreview: View {
+    let pending: PendingEventsAppereance
+    let tentative: TentativeEventsAppereance
+    let declined: DeclinedEventsAppereance
+
+    private enum Look { case normal, underlined, inactive, strikethrough, hidden }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            row("preferences_appearance_events_preview_going".loco(), look: .normal, bar: .filled)
+            row("preferences_appearance_events_preview_pending".loco(), look: look(pending), bar: .hollow)
+            row("preferences_appearance_events_preview_maybe".loco(), look: look(tentative), bar: .striped)
+            row("preferences_appearance_events_preview_declined".loco(), look: look(declined), bar: .hollow)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+        .accessibilityElement(children: .combine)
+    }
+
+    private enum Bar { case filled, striped, hollow }
+
+    @ViewBuilder
+    private func row(_ title: String, look: Look, bar: Bar) -> some View {
+        HStack(spacing: 8) {
+            barView(bar).frame(width: 3, height: 13)
+            Text("10:00").monospacedDigit().foregroundStyle(.secondary)
+            if look == .hidden {
+                Text("preferences_appearance_events_preview_hidden".loco(title))
+                    .italic()
+                    .foregroundColor(.secondary.opacity(0.6))
+            } else {
+                Text(title)
+                    .strikethrough(look == .strikethrough, color: Color.secondary.opacity(0.6))
+                    .underline(look == .underlined)
+                    .foregroundColor(look == .inactive || look == .strikethrough ? .secondary : .primary)
+            }
+        }
+        .font(.system(size: 12))
+    }
+
+    @ViewBuilder
+    private func barView(_ bar: Bar) -> some View {
+        switch bar {
+        case .filled: RoundedRectangle(cornerRadius: 1.5).fill(Color.accentColor)
+        case .striped: RoundedRectangle(cornerRadius: 1.5).fill(Color.accentColor.opacity(0.45))
+        case .hollow: RoundedRectangle(cornerRadius: 1.5).strokeBorder(Color.accentColor, lineWidth: 1)
+        }
+    }
+
+    private func look(_ value: PendingEventsAppereance) -> Look {
+        switch value {
+        case .show: .normal
+        case .show_underlined: .underlined
+        case .show_inactive: .inactive
+        case .hide: .hidden
+        }
+    }
+
+    private func look(_ value: TentativeEventsAppereance) -> Look {
+        switch value {
+        case .show: .normal
+        case .show_underlined: .underlined
+        case .show_inactive: .inactive
+        case .hide: .hidden
+        }
+    }
+
+    private func look(_ value: DeclinedEventsAppereance) -> Look {
+        switch value {
+        case .strikethrough: .strikethrough
+        case .show_inactive: .inactive
+        case .hide: .hidden
+        }
+    }
 }
