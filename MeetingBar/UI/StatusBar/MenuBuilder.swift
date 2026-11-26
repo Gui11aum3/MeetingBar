@@ -1260,7 +1260,11 @@ struct MenuBuilder {
             if state.events.declinedEventsAppearance == .show_inactive {
                 style.attributes[.foregroundColor] = NSColor.disabledControlTextColor
             } else {
-                style.attributes[.strikethroughStyle] = NSUnderlineStyle.thick.rawValue
+                // A thin, faint line on greyed text: readable as "declined"
+                // without shouting louder than the meetings you're going to.
+                style.attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                style.attributes[.strikethroughColor] = NSColor.tertiaryLabelColor
+                style.attributes[.foregroundColor] = NSColor.secondaryLabelColor
             }
             style.shouldShowAsActive = false
         }
