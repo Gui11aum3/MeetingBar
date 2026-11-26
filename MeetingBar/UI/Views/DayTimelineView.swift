@@ -129,20 +129,28 @@ struct DayRelativeTimelineView: View {
 
             ZStack(alignment: .topLeading) {
 
-                // Hour grid
+                // One thin track the meetings sit on.
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: width, height: 4)
+                    .offset(y: (DayTimelineLayout.baseTrackHeight - 4) / 2)
+
+                // Hour grid: faint ticks, muted labels. Labels too close to
+                // an edge are skipped so they never get clipped.
                 ForEach(layout.hourTicks(), id: \.self) { tick in
                     let x = layout.xPosition(of: tick, width: width)
                     Path { path in
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: contentHeight))
+                        path.move(to: CGPoint(x: x, y: 2))
+                        path.addLine(to: CGPoint(x: x, y: contentHeight - 2))
                     }
-                    .stroke(Color.primary.opacity(0.25)
-, lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
 
-                    Text(hourFormatter.string(from: tick))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .position(x: x, y: -8)
+                    if x >= Self.labelEdgeInset, x <= width - Self.labelEdgeInset {
+                        Text(hourFormatter.string(from: tick))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .position(x: x, y: -8)
+                    }
                 }
 
                 // Event rows
@@ -152,14 +160,10 @@ struct DayRelativeTimelineView: View {
                         let endX    = layout.xPosition(of: min(seg.end, layout.visibleRange.upperBound), width: width)
                         let widthPx = max(endX - startX, DayTimelineLayout.segmentHeight / 2)
 
+                        // Solid meeting colour, no outline; the featured
+                        // meeting is full strength, the rest a little lighter.
                         Capsule()
-                            .fill(seg.color.opacity(seg.isHighlighted ? 0.55 : 0.25))
-                            .overlay(
-                                Capsule().stroke(
-                                    seg.color,
-                                    lineWidth: seg.isHighlighted ? 2 : 1
-                                )
-                            )
+                            .fill(seg.color.opacity(seg.isHighlighted ? 1 : 0.6))
                             .frame(width: widthPx, height: DayTimelineLayout.segmentHeight)
                             .offset(
                                 x: startX,
@@ -186,11 +190,14 @@ struct DayRelativeTimelineView: View {
             .frame(height: contentHeight)
             .padding(.top, 10)
             .padding(.vertical, 8)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 17)
         }
         .frame(maxWidth: .infinity)
         .accessibilityLabel("timeline_accessibility_label".loco(segments.count))
     }
+
+    /// Half a label's width: closer than this to an edge, a label clips.
+    private static let labelEdgeInset: CGFloat = 8
 
     private var hourFormatter: DateFormatter {
         let format = DateFormatter()
