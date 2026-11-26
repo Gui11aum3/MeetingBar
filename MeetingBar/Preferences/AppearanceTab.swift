@@ -161,6 +161,12 @@ struct StatusBarSection: View {
 
     var body: some View {
         Section(header: Text("preferences_appearance_status_bar_title".loco())) {
+            StatusBarItemPreview(
+                icon: eventTitleIconFormat,
+                title: eventTitleFormat,
+                time: eventTimeFormat,
+                maxLength: statusbarEventTitleLength
+            )
             Picker(
                 preferenceLabel("preferences_appearance_status_bar_icon_title"),
                 selection: $eventTitleIconFormat
@@ -342,23 +348,17 @@ struct MenuSection: View {
                 isOn: $shortenEventTitle
             )
 
-            HStack {
-                Spacer()
-                Stepper(
-                    value: $menuEventTitleLength,
-                    in: 20 ... 100,
-                    step: 5
-                ) {
-                    Text(
-                        "preferences_appearance_menu_shorten_event_title_stepper".loco(
-                            menuEventTitleLength)
-                    )
-                    .monospacedDigit()
+            if shortenEventTitle {
+                HStack {
+                    Text("preferences_appearance_status_bar_title_length_label".loco())
+                    Spacer()
+                    Text("preferences_appearance_menu_shorten_event_title_stepper".loco(menuEventTitleLength))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Stepper("", value: $menuEventTitleLength, in: 20 ... 100, step: 5)
+                        .labelsHidden()
                 }
-                .fixedSize()
             }
-            .padding(.leading, 16)
-            .disabled(!shortenEventTitle)
         }
     }
 }
@@ -443,5 +443,62 @@ private struct AnswerStylesPreview: View {
         case .show_inactive: .inactive
         case .hide: .hidden
         }
+    }
+}
+
+/// The menu bar item as it will look with the current choices, on a
+/// menu-bar-like strip, so icon, title and time can be judged together.
+private struct StatusBarItemPreview: View {
+    let icon: EventTitleIconFormat
+    let title: EventTitleFormat
+    let time: EventTimeFormat
+    let maxLength: Int
+
+    private let sampleTitle = "preferences_appearance_status_bar_preview_title".loco()
+    private let sampleTime = "preferences_appearance_status_bar_preview_time".loco()
+
+    private var titleText: String? {
+        switch title {
+        case .show:
+            sampleTitle.count > maxLength ? String(sampleTitle.prefix(maxLength)) + "…" : sampleTitle
+        case .generic: "preferences_appearance_status_bar_preview_generic".loco()
+        case .dot: "•"
+        case .none: nil
+        }
+    }
+
+    var body: some View {
+        HStack {
+            Spacer()
+            HStack(spacing: 5) {
+                if icon != .none {
+                    Image(nsImage: NSImage(named: icon.rawValue) ?? NSImage())
+                        .resizable()
+                        .frame(width: 14, height: 14)
+                }
+                if time == .show_under_title {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let titleText { Text(titleText).font(.system(size: 11)) }
+                        Text(sampleTime).font(.system(size: 9)).foregroundColor(.secondary)
+                    }
+                } else {
+                    if let titleText { Text(titleText) }
+                    if time == .show { Text(sampleTime).foregroundColor(.secondary) }
+                }
+                if icon == .none, titleText == nil, time == .hide {
+                    Text("preferences_appearance_status_bar_preview_empty".loco()).foregroundColor(.secondary)
+                }
+            }
+            .font(.system(size: 13))
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08)))
+            Text("09:41").font(.system(size: 13)).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+        .accessibilityElement(children: .combine)
     }
 }

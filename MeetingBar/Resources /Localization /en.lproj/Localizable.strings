@@ -138,6 +138,12 @@
 "preferences_appearance_events_preview_maybe" = "Maybe";
 "preferences_appearance_events_preview_declined" = "Declined";
 "preferences_appearance_events_preview_hidden" = "%@ (hidden)";
+"preferences_appearance_status_bar_preview_title" = "Design review with Alex";
+"preferences_appearance_status_bar_preview_time" = "in 12m";
+"preferences_appearance_status_bar_preview_generic" = "Meeting";
+"preferences_appearance_status_bar_preview_empty" = "Nothing shown";
+"preferences_services_search_placeholder" = "Find a service";
+"preferences_services_search_empty" = "No service matches “%@”.";
 "preferences_appearance_status_bar_time_title" = "Show time";
 "preferences_appearance_status_bar_time_show_value" = "show";
 "preferences_appearance_status_bar_time_show_under_title_value" = "show under title";
