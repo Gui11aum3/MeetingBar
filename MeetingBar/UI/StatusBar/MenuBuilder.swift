@@ -276,9 +276,10 @@ struct MenuBuilder {
                 id: event.id,
                 start: max(event.startDate, today),
                 end: min(event.endDate, tomorrow),
-                color: Color(event.displayColor),
+                color: Color(event.displayColor.adaptedForMenu),
                 isHighlighted: event.id == highlightedEventID,
-                title: event.title
+                // Hover label: "Design review · 15:00–15:30".
+                title: event.isAllDay ? event.title : "\(event.title) · \(Self.timeRange(of: event, format: state.timeFormat))"
             )
         }
         let timeline = DayRelativeTimelineView(
@@ -326,7 +327,11 @@ struct MenuBuilder {
                 : getIconForMeetingService(presentation.meetingService),
             onJoin: onJoin,
             joinShortcut: KeyboardShortcuts.getShortcut(for: .joinEventShortcut)?.description,
-            showsMore: !Self.canRespond(to: event, now: now)
+            showsMore: !Self.canRespond(to: event, now: now),
+            progress: Self.progress(of: event, now: now),
+            accentColor: Color(event.displayColor.adaptedForMenu),
+            attendeeInitials: Self.attendeeInitials(for: event),
+            extraAttendees: max(event.attendees.filter { !$0.isCurrentUser }.count - 4, 0)
         )
         let hosting = NSHostingView(rootView: summary)
         hosting.frame = NSRect(
@@ -338,6 +343,27 @@ struct MenuBuilder {
         hosting.autoresizingMask = [.width]
         item.view = hosting
         return item
+    }
+
+    static func timeRange(of event: MBEvent, format: TimeFormat) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = I18N.instance.locale
+        formatter.dateFormat = format == .am_pm ? "h:mm a" : "HH:mm"
+        return "\(formatter.string(from: event.startDate))–\(formatter.string(from: event.endDate))"
+    }
+
+    static func progress(of event: MBEvent, now: Date) -> Double? {
+        guard !event.isAllDay, event.startDate <= now, event.endDate > now else { return nil }
+        let total = event.endDate.timeIntervalSince(event.startDate)
+        return total > 0 ? now.timeIntervalSince(event.startDate) / total : nil
+    }
+
+    static func attendeeInitials(for event: MBEvent) -> [String] {
+        event.attendees.filter { !$0.isCurrentUser }.prefix(4).map { attendee in
+            let words = attendee.name.split(separator: " ").prefix(2)
+            let letters = words.compactMap(\.first).map(String.init).joined()
+            return letters.isEmpty ? "?" : letters.uppercased()
+        }
     }
 
     private func firstMeaningfulMetadataValue(_ values: [String?]) -> String? {
@@ -430,13 +456,24 @@ struct MenuBuilder {
             }
             items.append(item)
         }
+        let overlapping = usesDaySummaryLayout ? Self.overlappingEventIDs(sortedEvents.filter { shouldRenderEvent($0) }) : []
+        var earlierItems: [NSMenuItem] = []
         for event in sortedEvents {
             if let item = makeEventItem(event) {
-                items.append(item)
+                if usesDaySummaryLayout, overlapping.contains(event.id) {
+                    Self.appendOverlapTag(to: item)
+                }
                 let expandable = item.submenu == nil && Self.isExpandable(event, now: now)
                 if usesDaySummaryLayout {
                     Self.prependParticipationBar(to: item, event: event)
                 }
+                // Finished meetings fold into one "N earlier" row so the eye
+                // lands on what's left.
+                if usesDaySummaryLayout, event.endDate <= now {
+                    earlierItems.append(item)
+                    continue
+                }
+                items.append(item)
                 if expandable {
                     items.append(contentsOf: makeExpandableRow(item, event: event))
                 } else {
@@ -444,8 +481,63 @@ struct MenuBuilder {
                 }
             }
         }
+        if earlierItems.count == 1, let only = earlierItems.first {
+            items.insert(only, at: firstEventIndex(in: items))
+        } else if earlierItems.count > 1 {
+            let row = NSMenuItem(
+                title: "status_bar_day_summary_earlier".loco(earlierItems.count),
+                action: nil,
+                keyEquivalent: ""
+            )
+            row.attributedTitle = NSAttributedString(string: row.title, attributes: [
+                .font: NSFont.systemFont(ofSize: MenuStyleConstants.defaultFontSize - 1),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ])
+            let submenu = NSMenu(title: row.title)
+            earlierItems.forEach(submenu.addItem)
+            row.submenu = submenu
+            items.insert(row, at: firstEventIndex(in: items))
+        }
 
         return items
+    }
+
+    /// Where event rows start in a day section (after its title and summary).
+    private func firstEventIndex(in items: [NSMenuItem]) -> Int {
+        items.firstIndex { $0.representedObject is MBEvent } ?? items.count
+    }
+
+    /// IDs of meetings that overlap another meeting in the same list.
+    static func overlappingEventIDs(_ events: [MBEvent]) -> Set<String> {
+        let timed = events.filter { !$0.isAllDay && $0.participationStatus != .declined }
+        var ids: Set<String> = []
+        for (index, event) in timed.enumerated() {
+            for other in timed[(index + 1)...] where other.startDate < event.endDate && other.endDate > event.startDate {
+                ids.insert(event.id)
+                ids.insert(other.id)
+            }
+        }
+        return ids
+    }
+
+    /// A quiet "· overlaps" after the title marks a double booking.
+    private static func appendOverlapTag(to item: NSMenuItem) {
+        let text = NSMutableAttributedString(attributedString: item.attributedTitle ?? NSAttributedString(string: item.title))
+        text.append(NSAttributedString(string: "  ·  " + "status_bar_event_overlaps".loco(), attributes: [
+            .font: NSFont.systemFont(ofSize: MenuStyleConstants.defaultFontSize - 2),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]))
+        item.attributedTitle = text
+    }
+
+    /// Long titles keep both ends: "AIM PDLC: Discover … Weekly".
+    static func middleTruncated(_ title: String, maxLength: Int = 44) -> String {
+        guard title.count > maxLength else { return title }
+        let head = (maxLength - 1) * 3 / 5
+        let tail = maxLength - 1 - head
+        return String(title.prefix(head)).trimmingCharacters(in: .whitespaces)
+            + " … "
+            + String(title.suffix(tail)).trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: Day summary -------------------------------------------------------
@@ -583,7 +675,7 @@ struct MenuBuilder {
         }
         let attachment = NSTextAttachment()
         let style = participationBarStyle(for: event)
-        attachment.image = participationBar(style: style, color: event.displayColor)
+        attachment.image = participationBar(style: style, color: event.displayColor.adaptedForMenu)
         attachment.bounds = NSRect(x: 0, y: -2.5, width: 4, height: 15)
         let bar = NSMutableAttributedString(attachment: attachment)
         bar.append(NSAttributedString(string: "\t"))
@@ -623,7 +715,7 @@ struct MenuBuilder {
         let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
         item.attributedTitle = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: MenuStyleConstants.defaultFontSize - 2),
-            .foregroundColor: offline ? NSColor.systemOrange : NSColor.tertiaryLabelColor
+            .foregroundColor: offline ? NSColor.systemOrange : NSColor.secondaryLabelColor
         ])
         item.isEnabled = false
         return item
@@ -860,7 +952,8 @@ struct MenuBuilder {
     private func makeEventItem(_ event: MBEvent) -> NSMenuItem? {
         guard shouldRenderEvent(event) else { return nil }
 
-        let menuTitle = eventMenuTitle(for: event)
+        let fullTitle = eventMenuTitle(for: event)
+        let menuTitle = usesDaySummaryLayout ? Self.middleTruncated(fullTitle) : fullTitle
         let time = eventTimePresentation(for: event)
         let itemTitle = eventItemAttributedTitle(
             eventTitle: menuTitle,
@@ -878,6 +971,9 @@ struct MenuBuilder {
             time: time
         )
 
+        if menuTitle != fullTitle, eventItem.toolTip == nil {
+            eventItem.toolTip = fullTitle
+        }
         return eventItem
     }
 
@@ -1788,5 +1884,23 @@ struct MenuBuilder {
         let service = candidate.service?.localizedValue ?? "constants_meeting_service_other".loco()
         guard let host = candidate.url.host else { return service }
         return "\(service) - \(host)"
+    }
+}
+
+extension NSColor {
+    /// Calendar colours tuned per appearance: dark ones (Graphite) are
+    /// lifted on a dark menu, and very bright ones are softened on a light
+    /// one, so bars and timeline blocks stay readable in both.
+    var adaptedForMenu: NSColor {
+        NSColor(name: nil) { appearance in
+            guard let rgb = self.usingColorSpace(.sRGB) else { return self }
+            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+            rgb.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            if isDark {
+                return NSColor(hue: hue, saturation: saturation * 0.9, brightness: max(brightness, 0.72), alpha: alpha)
+            }
+            return NSColor(hue: hue, saturation: saturation, brightness: min(brightness, 0.88), alpha: alpha)
+        }
     }
 }

@@ -21,15 +21,19 @@ struct RoomChipsView: View {
             ForEach(rooms, id: \.self) { room in
                 HStack(spacing: 4) {
                     Image(systemName: isLocation ? "mappin.and.ellipse" : "door.left.hand.open")
-                        .font(.system(size: prominent ? 11 : 10, weight: prominent ? .semibold : .regular))
+                        .font(.system(size: 11, weight: prominent ? .medium : .regular))
                     Text(room)
-                        .font(prominent ? .system(size: 12, weight: .semibold) : .caption)
+                        .font(.system(size: 11, weight: prominent ? .medium : .regular))
                         .lineLimit(1)
                 }
-                .foregroundStyle(prominent ? AnyShapeStyle(Color.white) : AnyShapeStyle(.secondary))
-                .padding(.horizontal, prominent ? 12 : 8)
-                .padding(.vertical, prominent ? 4 : 3)
-                .background(Capsule().fill(prominent ? Color(nsColor: .systemTeal) : Color.primary.opacity(0.08)))
+                .foregroundStyle(prominent ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                // Light tint with coloured text reads in light and dark mode,
+                // unlike white text on a bright fill.
+                .background(RoundedRectangle(cornerRadius: 6).fill(
+                    prominent ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.08)
+                ))
             }
             Spacer(minLength: 0)
         }

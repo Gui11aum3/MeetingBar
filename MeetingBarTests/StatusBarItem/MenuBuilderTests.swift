@@ -232,9 +232,9 @@ final class MenuBuilderTests: BaseTestCase {
         XCTAssertTrue(
             hosting.rootView.segments.first { $0.id == event.id }?.isHighlighted ?? false
         )
-        XCTAssertEqual(
-            hosting.rootView.segments.first { $0.id == event.id }?.title,
-            event.title
+        // The hover label leads with the title, then the time.
+        XCTAssertTrue(
+            hosting.rootView.segments.first { $0.id == event.id }?.title?.hasPrefix(event.title) ?? false
         )
     }
 
@@ -1880,5 +1880,30 @@ final class StatusBarItemControllerPresentationTests: BaseTestCase {
         )
         event.participationStatus = participationStatus
         return event
+    }
+
+    func testOverlappingMeetingsAreFlagged() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let first = makeFakeEvent(id: "a", start: now, end: now.addingTimeInterval(1800), withLink: false, calendarOpenURL: nil)
+        let second = makeFakeEvent(id: "b", start: now.addingTimeInterval(900), end: now.addingTimeInterval(2700), withLink: false, calendarOpenURL: nil)
+        let later = makeFakeEvent(id: "c", start: now.addingTimeInterval(3600), end: now.addingTimeInterval(5400), withLink: false, calendarOpenURL: nil)
+        XCTAssertEqual(MenuBuilder.overlappingEventIDs([first, second, later]), ["a", "b"])
+    }
+
+    func testLongTitlesKeepBothEnds() {
+        let title = "AIM PDLC: Discover WS Leads + Friends Weekly sync for everyone"
+        let short = MenuBuilder.middleTruncated(title)
+        XCTAssertLessThanOrEqual(short.count, 46)
+        XCTAssertTrue(short.hasPrefix("AIM PDLC"))
+        XCTAssertTrue(short.hasSuffix("everyone"))
+        XCTAssertEqual(MenuBuilder.middleTruncated("Standup"), "Standup")
+    }
+
+    func testProgressOnlyForRunningMeetings() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let running = makeFakeEvent(id: "r", start: now.addingTimeInterval(-900), end: now.addingTimeInterval(900), withLink: false, calendarOpenURL: nil)
+        let upcoming = makeFakeEvent(id: "u", start: now.addingTimeInterval(600), end: now.addingTimeInterval(1800), withLink: false, calendarOpenURL: nil)
+        XCTAssertEqual(MenuBuilder.progress(of: running, now: now) ?? 0, 0.5, accuracy: 0.001)
+        XCTAssertNil(MenuBuilder.progress(of: upcoming, now: now))
     }
 }

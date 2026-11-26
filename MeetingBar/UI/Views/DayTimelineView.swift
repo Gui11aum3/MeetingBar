@@ -135,6 +135,18 @@ struct DayRelativeTimelineView: View {
                     .frame(width: width, height: 4)
                     .offset(y: (DayTimelineLayout.baseTrackHeight - 4) / 2)
 
+                // Free stretches of 30 min or more ahead of now, lightly
+                // striped, so "free from" is visible at a glance.
+                ForEach(Array(freeGaps.enumerated()), id: \.offset) { _, gap in
+                    let startX = layout.xPosition(of: gap.lowerBound, width: width)
+                    let endX = layout.xPosition(of: gap.upperBound, width: width)
+                    FreeStripes()
+                        .fill(Color.primary.opacity(0.07))
+                        .frame(width: max(endX - startX, 0), height: DayTimelineLayout.segmentHeight)
+                        .clipShape(Capsule())
+                        .offset(x: startX, y: (DayTimelineLayout.baseTrackHeight - DayTimelineLayout.segmentHeight) / 2)
+                }
+
                 // Hour grid: faint ticks, muted labels. Labels too close to
                 // an edge are skipped so they never get clipped.
                 ForEach(layout.hourTicks(), id: \.self) { tick in
@@ -196,6 +208,25 @@ struct DayRelativeTimelineView: View {
         .accessibilityLabel("timeline_accessibility_label".loco(segments.count))
     }
 
+    /// Gaps of at least 30 minutes between now and the end of the view.
+    private var freeGaps: [ClosedRange<Date>] {
+        let minimum: TimeInterval = 30 * 60
+        let busy = segments.sorted { $0.start < $1.start }
+        var cursor = max(currentDate, layout.visibleRange.lowerBound)
+        var gaps: [ClosedRange<Date>] = []
+        for seg in busy where seg.end > cursor {
+            if seg.start.timeIntervalSince(cursor) >= minimum {
+                gaps.append(cursor...seg.start)
+            }
+            cursor = max(cursor, seg.end)
+        }
+        let end = layout.visibleRange.upperBound
+        if end.timeIntervalSince(cursor) >= minimum {
+            gaps.append(cursor...end)
+        }
+        return gaps
+    }
+
     /// Half a label's width: closer than this to an edge, a label clips.
     private static let labelEdgeInset: CGFloat = 8
 
@@ -254,4 +285,22 @@ struct DayRelativeTimelineView: View {
         timeFormat: .military
     )
     .padding()
+}
+
+/// Diagonal stripes for free time on the timeline.
+private struct FreeStripes: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let step: CGFloat = 4
+        var x = rect.minX - rect.height
+        while x < rect.maxX {
+            path.move(to: CGPoint(x: x, y: rect.maxY))
+            path.addLine(to: CGPoint(x: x + rect.height, y: rect.minY))
+            path.addLine(to: CGPoint(x: x + rect.height + 1.5, y: rect.minY))
+            path.addLine(to: CGPoint(x: x + 1.5, y: rect.maxY))
+            path.closeSubpath()
+            x += step
+        }
+        return path
+    }
 }

@@ -272,6 +272,8 @@
 "preferences_appearance_menu_hide_featured_event_toggle" = "Don't repeat the next meeting in the list";
 "status_bar_control_starts_in" = "Starts in %@";
 "status_bar_control_now_ends_in" = "Now · ends in %@";
+"status_bar_day_summary_earlier" = "%d earlier";
+"status_bar_event_overlaps" = "overlaps";
 "status_bar_action_answered_yes" = "Going";
 "status_bar_action_answered_maybe" = "Maybe";
 "status_bar_action_answered_no" = "Not going";
