@@ -232,9 +232,9 @@ final class MenuBuilderTests: BaseTestCase {
         XCTAssertTrue(
             hosting.rootView.segments.first { $0.id == event.id }?.isHighlighted ?? false
         )
-        XCTAssertEqual(
-            hosting.rootView.segments.first { $0.id == event.id }?.title,
-            event.title
+        // The hover label leads with the title, then the time.
+        XCTAssertTrue(
+            hosting.rootView.segments.first { $0.id == event.id }?.title?.hasPrefix(event.title) ?? false
         )
     }
 
@@ -282,7 +282,9 @@ final class MenuBuilderTests: BaseTestCase {
             .buildMeetingControlSection()
 
         let actions = try XCTUnwrap(items.first {
+            // Without Yes / Maybe / No the card itself carries the actions.
             $0.title == "status_bar_control_actions".loco()
+                || $0.identifier == MenuBuilder.meetingSummaryItemIdentifier
         }?.submenu?.items)
 
         // Summary card is the primary (first) item and carries the event
@@ -374,10 +376,8 @@ final class MenuBuilderTests: BaseTestCase {
         let presentation = MenuBuilder(target: Dummy(), state: state, now: now)
             .meetingSummaryPresentation(for: event)
 
-        XCTAssertEqual(
-            presentation.metadata.filter { $0 == duplicateValue }.count,
-            1
-        )
+        // Addresses (account, email-named calendar) are left out entirely.
+        XCTAssertFalse(presentation.metadata.contains(duplicateValue))
         XCTAssertTrue(presentation.metadata.contains("Zoom"))
         XCTAssertEqual(
             presentation.sectionTitle,
@@ -459,7 +459,9 @@ final class MenuBuilderTests: BaseTestCase {
         let items = MenuBuilder(target: Dummy(), state: state, now: now)
             .buildMeetingControlSection()
         let actions = try XCTUnwrap(items.first {
+            // Without Yes / Maybe / No the card itself carries the actions.
             $0.title == "status_bar_control_actions".loco()
+                || $0.identifier == MenuBuilder.meetingSummaryItemIdentifier
         }?.submenu?.items)
 
         // Summary card is shown but carries no join action
@@ -509,6 +511,60 @@ final class MenuBuilderTests: BaseTestCase {
         XCTAssertTrue(items.contains {
             $0.action == #selector(StatusBarItemController.handleManualRefresh)
         })
+    }
+
+    func testDaySummaryCountsMeetingsLeftAndFreeTime() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let past = makeFakeEvent(id: "p", start: now - 7200, end: now - 3600)
+        let current = makeFakeEvent(id: "c", start: now - 600, end: now + 600)
+        let later = makeFakeEvent(id: "l", start: now + 3600, end: now + 5400)
+
+        let summary = MenuBuilder.daySummary(events: [past, current, later], now: now)
+
+        XCTAssertEqual(summary.meetingsLeft, 2)
+        XCTAssertEqual(summary.freeFrom, now + 5400)
+        XCTAssertEqual(MenuBuilder.daySummary(events: [past], now: now).meetingsLeft, 0)
+    }
+
+    @MainActor
+    func testGoogleWorkingLocationsMapOfficeAndHomeDays() {
+        let items: [[String: Any]] = [
+            ["start": ["date": "2026-11-13"], "workingLocationProperties": ["type": "officeLocation"]],
+            ["start": ["date": "2026-11-14"], "workingLocationProperties": ["type": "homeOffice"]]
+        ]
+        let days = GoogleCalendarDataReader.workingLocations(from: items)
+        XCTAssertEqual(days["2026-11-13"], .office)
+        XCTAssertEqual(days["2026-11-14"], .home)
+    }
+
+    func testParticipationBarStyleFollowsResponse() {
+        var event = makeFakeEvent(id: "r", start: Date(), end: Date() + 600)
+        event.participationStatus = .accepted
+        XCTAssertEqual(MenuBuilder.participationBarStyle(for: event), .filled)
+        event.participationStatus = .tentative
+        XCTAssertEqual(MenuBuilder.participationBarStyle(for: event), .striped)
+        event.participationStatus = .declined
+        XCTAssertEqual(MenuBuilder.participationBarStyle(for: event), .hollow)
+        event.participationStatus = .pending
+        XCTAssertEqual(MenuBuilder.participationBarStyle(for: event), .hollow)
+    }
+
+    func testDaySummaryLayoutAddsGlyphColumnAndHidesRateApp() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        var builder = MenuBuilder(
+            target: Dummy(), state: StatusBarMenuState.make(from: []),
+            installationDate: now - 60 * 86400, now: now)
+        builder.usesDaySummaryLayout = true
+        let upcoming = makeFakeEvent(id: "u", start: now + 3600, end: now + 5400)
+
+        let titles = MenuBuilder.plainTitles(
+            of: builder.buildDateSection(date: now, title: "Today", events: [upcoming]))
+
+        XCTAssertEqual(titles.first, "Today")
+        XCTAssertEqual(titles.dropFirst().first?.hasPrefix("status_bar_day_summary_one".loco()), true)
+        XCTAssertEqual(titles.dropFirst(2).first?.hasPrefix("\u{FFFC}\t"), true)
+        XCTAssertFalse(MenuBuilder.plainTitles(of: builder.buildPreferencesSection())
+            .contains { $0.contains("status_bar_rate_app".loco()) })
     }
 
     func testDateSectionBuildsExpectedItems() {
@@ -939,7 +995,8 @@ final class MenuBuilderEventItemTests: BaseTestCase {
         let item = try XCTUnwrap(buildItem(event: event))
 
         XCTAssertNil(item.submenu)
-        XCTAssertEqual(item.toolTip, event.title)
+        // No hover tooltip: upcoming rows open in place on click instead.
+        XCTAssertNil(item.toolTip)
     }
 
     func test_eventDetailsPreserveEstablishedFieldsAndActions() throws {
@@ -1823,5 +1880,30 @@ final class StatusBarItemControllerPresentationTests: BaseTestCase {
         )
         event.participationStatus = participationStatus
         return event
+    }
+
+    func testOverlappingMeetingsAreFlagged() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let first = makeFakeEvent(id: "a", start: now, end: now.addingTimeInterval(1800), withLink: false, calendarOpenURL: nil)
+        let second = makeFakeEvent(id: "b", start: now.addingTimeInterval(900), end: now.addingTimeInterval(2700), withLink: false, calendarOpenURL: nil)
+        let later = makeFakeEvent(id: "c", start: now.addingTimeInterval(3600), end: now.addingTimeInterval(5400), withLink: false, calendarOpenURL: nil)
+        XCTAssertEqual(MenuBuilder.overlappingEventIDs([first, second, later]), ["a", "b"])
+    }
+
+    func testLongTitlesKeepBothEnds() {
+        let title = "AIM PDLC: Discover WS Leads + Friends Weekly sync for everyone"
+        let short = MenuBuilder.middleTruncated(title)
+        XCTAssertLessThanOrEqual(short.count, 46)
+        XCTAssertTrue(short.hasPrefix("AIM PDLC"))
+        XCTAssertTrue(short.hasSuffix("everyone"))
+        XCTAssertEqual(MenuBuilder.middleTruncated("Standup"), "Standup")
+    }
+
+    func testProgressOnlyForRunningMeetings() {
+        let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let running = makeFakeEvent(id: "r", start: now.addingTimeInterval(-900), end: now.addingTimeInterval(900), withLink: false, calendarOpenURL: nil)
+        let upcoming = makeFakeEvent(id: "u", start: now.addingTimeInterval(600), end: now.addingTimeInterval(1800), withLink: false, calendarOpenURL: nil)
+        XCTAssertEqual(MenuBuilder.progress(of: running, now: now) ?? 0, 0.5, accuracy: 0.001)
+        XCTAssertNil(MenuBuilder.progress(of: upcoming, now: now))
     }
 }

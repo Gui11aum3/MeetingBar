@@ -79,6 +79,12 @@ extension Defaults.Keys {
     static let menuEventTitleLength = Key<Int>("menuEventTitleLength", default: 50)
 
     static let showEventDetails = Key<Bool>("showEventDetails", default: false)
+    /// Leave the meeting featured at the top out of the event list below it.
+    static let hideFeaturedEventInList = Key<Bool>("hideFeaturedEventInList", default: true)
+    /// Meeting room / location chip: "off", "officeDays" or "always".
+    static let meetingPlaceChipMode = Key<String>("meetingPlaceChipMode", default: "officeDays")
+    /// Google working location per day ("yyyy-MM-dd" -> office/home/other).
+    static let workingLocationsByDay = Key<[String: String]>("workingLocationsByDay", default: [:])
     static let showMeetingServiceIcon = Key<Bool>("showMeetingServiceIcon", default: true)
     static let showEventCalendarColor = Key<Bool>("showEventCalendarColor", default: true)
 

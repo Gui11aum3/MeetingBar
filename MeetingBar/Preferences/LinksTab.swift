@@ -19,6 +19,7 @@ struct LinksTab: View {
     @Default(.bookmarks) var bookmarks
 
     @State var showBrowserConfiguration = false
+    @State private var serviceSearch = ""
 
     @State var showingAddBookmarkModal = false
     @State private var showingAlert = false
@@ -63,10 +64,19 @@ struct LinksTab: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                ForEach(
-                    MeetingProvider.all.filter { !$0.openingModes.isEmpty }, id: \.id
-                ) { provider in
+                // A long list needs a way in: filter by service name.
+                TextField("preferences_services_search_placeholder".loco(), text: $serviceSearch)
+                    .textFieldStyle(.roundedBorder)
+                let providers = MeetingProvider.all.filter { provider in
+                    !provider.openingModes.isEmpty && (serviceSearch.isEmpty
+                        || provider.displayName.localizedCaseInsensitiveContains(serviceSearch))
+                }
+                ForEach(providers, id: \.id) { provider in
                     MeetingProviderOpeningPicker(provider: provider)
+                }
+                if providers.isEmpty {
+                    Text("preferences_services_search_empty".loco(serviceSearch))
+                        .foregroundStyle(.secondary)
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
